@@ -3,7 +3,7 @@
 	<include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch">
 	</include>
 
-	<node pkg="APF_controller_sim" type="APF_controller.py" name="APF_controller" output="screen">
+	<node pkg="gazebo_controller_sims" type="APF_controller.py" name="APF_controller" output="screen">
 	</node>
 
 </launch>
