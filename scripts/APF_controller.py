@@ -80,7 +80,7 @@ def odom_callback(odom_msg):
     twist = Twist()
     twist.linear.x = 0.5*vw_vector[0]
     twist.angular.z = 0.5*vw_vector[1]
-    twist_pub.publish(twist)
+    # twist_pub.publish(twist)
 
 
 #def xy_vels_to_wv_vels(xdot, ydot):

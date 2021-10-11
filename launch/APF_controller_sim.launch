@@ -5,5 +5,7 @@
 
 	<node pkg="gazebo_controller_sims" type="APF_controller.py" name="APF_controller" output="screen">
 	</node>
-
+	
+	<node pkg="gazebo_controller_sims" type="plot_lidar.py" name="plot_lidar" output="screen">
+	</node>
 </launch>
