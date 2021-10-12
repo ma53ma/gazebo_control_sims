@@ -64,7 +64,7 @@ def odom_callback(odom_msg):
     vel_rep = np.reshape(vel_rep, (2, 1))
     vel_total = -vel_att - vel_rep
 
-    rospy.loginfo('obst_cnt is ${0}'.format(obst_cnt))
+    # rospy.loginfo('obst_cnt is ${0}'.format(obst_cnt))
     # transformation to v,w
     l = 0.1
     l_mat = np.array([[1, 0],
@@ -87,7 +87,7 @@ def odom_callback(odom_msg):
 
 def APF_controller():
     rospy.init_node('APF_controller', anonymous=True)
-    odom_sub = rospy.Subscriber('/odom', Odometry, odom_callback)
+    odom_sub = rospy.Subscriber('/odom', Odometry, odom_callback, queue_size=3, buff_size=2**14)
 
     # spin() simply keeps python from exiting until this node is stopped
     rospy.spin()
