@@ -1,11 +1,11 @@
 <launch>
 
-	<include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch">
+	<include file="$(find turtlebot3_gazebo)/launch/turtlebot3_world.launch"/>
+	<include file="$(find turtlebot3_slam)/launch/turtlebot3_slam.launch">
+		<arg name="slam_methods" value="gmapping"/>
 	</include>
 
-	<node pkg="gazebo_controller_sims" type="APF_controller.py" name="APF_controller" output="screen">
-	</node>
+	<node pkg="gazebo_controller_sims" type="APF_controller.py" name="APF_controller" output="screen" launch-prefix="gnome-terminal --command"/>
 	
-	<node pkg="gazebo_controller_sims" type="plot_lidar.py" name="plot_lidar" output="screen">
-	</node>
+<!--	<node pkg="gazebo_controller_sims" type="plot_lidar.py" name="plot_lidar" output="screen"/> -->
 </launch>
