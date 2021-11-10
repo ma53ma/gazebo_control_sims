@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  visualization_msgs
+  geometry_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -163,6 +165,7 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
    scripts/APF_controller.py scripts/plot_lidar.py
+   scripts_reddy/plot_points_rviz.py
    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
