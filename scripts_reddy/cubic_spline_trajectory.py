@@ -9,6 +9,10 @@ import numpy as np
 import bisect
 from scipy.integrate import quad
 
+class MaxVelocityNotReached(Exception):
+    def __init__(self, actual_vel, max_vel):
+        self.message = 'Actual velocity {} does not equal desired max velocity {}!'.format(
+            actual_vel, max_vel)
 
 class Spline:
     """
@@ -201,13 +205,14 @@ def calc_spline_course(x, y, ds=0.1):
     return rx, ry, ryaw, rk, s
 
 class cubic_trajectory:
-    def __init__(self,spline_object, v0 = 0.0, a0 = 0.0, max_accel=2.0, max_jerk=5.0):
+    def __init__(self,spline_object, max_vel, v0 = 0.0, a0 = 0.0, max_accel=2.0, max_jerk=5.0):
         #spline object is an instance of SPline2D
         self.max_accel = float(max_accel)
         self.a0 = float(a0)
         self.max_jerk = float(max_jerk)
         self.v0 = v0
         self.total_length = spline_object.calc_path_length()
+        self.max_vel = float(max_vel)
 
 
     def velocity_profile(self):
@@ -250,7 +255,51 @@ class cubic_trajectory:
                self.max_accel)**2 / (2. * self.max_accel)
         v_max = (-b + np.sqrt(b**2 - 4. * a * c)) / (2. * a)
 
+        # v_max represents the maximum velocity that could be attained if there was no cruise period
+        # (i.e. driving at constant speed without accelerating or jerking)
+        # if this velocity is less than our desired max velocity, the max velocity need to be updated
+        if self.max_vel > v_max:
+            # when this condition is tripped, there will be no cruise period (s_cruise=0)
+            self.max_vel = v_max
         
+        # setup arrays to store values at END of trajectory sections
+        self.times = np.zeros((7,))
+        self.vels = np.zeros((7,))
+        self.seg_lengths = np.zeros((7,))
+
+        # Section 0: max jerk up to max acceleration
+        self.times[0] = t_s1
+        self.vels[0] = v_s1
+        self.seg_lengths[0] = s_s1
+
+        # Section 1: accelerate at max_accel
+        index = 1
+        # compute change in velocity over the section
+        delta_v = (self.max_vel - self.max_jerk * (self.max_accel /
+                                                   self.max_jerk)**2 / 2.) - self.vels[index - 1]
+        self.times[index] = delta_v / self.max_accel
+        self.vels[index] = self.vels[index - 1] + \
+            self.max_accel * self.times[index]
+        self.seg_lengths[index] = self.vels[index - 1] * \
+            self.times[index] + self.max_accel * self.times[index]**2 / 2.
+
+        # Section 2: decrease acceleration (down to 0) until max speed is hit
+        index = 2
+        self.times[index] = self.max_accel / self.max_jerk
+        self.vels[index] = self.vels[index - 1] + self.max_accel * self.times[index] \
+            - self.max_jerk * self.times[index]**2 / 2.
+        
+        # as a check, the velocity at the end of the section should be self.max_vel
+        if not np.isclose(self.vels[index], self.max_vel):
+            raise MaxVelocityNotReached(self.vela[index], self.max_vel)
+        
+        # Section 3: will be done last
+        
+
+
+
+
+
 
 
 
