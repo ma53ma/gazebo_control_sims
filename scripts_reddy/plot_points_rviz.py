@@ -1,21 +1,25 @@
 #!/usr/bin/env python
 
 import rospy
+import numpy as np
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 
-class MarkerBasics(object):
-    def __init__(self):
-        self.marker_object_pub = rospy.Publisher('/points', MarkerArray, queue_size=1)
-        self.rate = rospy.Rate(1)
-        self.init_marker_Arr(z_val=0)
+try:
+    from cubic_spline_planner import Spline2D
+except ImportError:
+    raise
 
-    def init_marker_Arr(self, z_val=0):
+class MarkerBasics(object):
+    def __init__(self, lines, scale=0.1,pub_topic='/points'):
+        self.marker_object_pub = rospy.Publisher(pub_topic, MarkerArray, queue_size=1)
+        self.rate = rospy.Rate(1)
+        self.scale = scale
+        self.init_marker_Arr(lines, z_val=0)
+
+    def init_marker_Arr(self,lines, z_val=0):
         self.marker_arr_object = MarkerArray()
-        with open('way_points.txt') as file:
-            lines = file.readlines()
-            lines = [[float(str_val) for str_val in line.rstrip().split()] for line in lines]
-        
+
         self.array_length = len(lines)
         for index, coordinate in enumerate(lines):
             self.marker_arr_object.markers.append(self.make_marker(index, z_val, coordinate))
@@ -39,9 +43,9 @@ class MarkerBasics(object):
         self.marker_object.pose.orientation.y = 0
         self.marker_object.pose.orientation.z = 0
         self.marker_object.pose.orientation.w = 1.0
-        self.marker_object.scale.x = 0.1
-        self.marker_object.scale.y = 0.1
-        self.marker_object.scale.z = 0.1
+        self.marker_object.scale.x = self.scale
+        self.marker_object.scale.y = self.scale
+        self.marker_object.scale.z = self.scale
 
         self.marker_object.color.r = 0.0
         self.marker_object.color.g = 0.0
@@ -68,8 +72,34 @@ class MarkerBasics(object):
 
 if __name__ == '__main__':
     rospy.init_node('points_vis_node', anonymous=True)
-    markerbasics_object = MarkerBasics()
+    with open('way_points.txt') as file:
+        lines = file.readlines()
+        lines = [[float(str_val) for str_val in line.rstrip().split()] for line in lines]
+    markerbasics_object = MarkerBasics(lines)
+
+    # Cubic Spline fit and display
+    # make it a numpy array and extend second dimensions with zeros for theta
+    lines = np.pad(np.array(lines),[(0,0),(0,1)],mode='constant')
+    x = lines[:,0]
+    y = lines[:,1]
+
+    # x = [-2.5, 0.0, 2.5, 5.0, 7.5, 3.0, -1.0]
+    # y = [0.7, -6, 5, 6.5, 0.0, 5.0, -2.0]
+    ds = 0.01  # [m] distance of each interpolated points
+
+    sp = Spline2D(x, y)
+    s = np.arange(0, sp.s[-1], ds)
+    rx, ry = [], []
+    for i_s in s:
+        ix, iy = sp.calc_position(i_s)
+        rx.append(ix)
+        ry.append(iy)
+    rxy = np.append([rx],[ry],axis=0).transpose()
+    path_object = MarkerBasics(rxy,scale=0.05,pub_topic='/points1')
+
+
     try:
         markerbasics_object.start()
+        path_object.start()
     except rospy.ROSInterruptException:
         pass
