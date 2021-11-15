@@ -8,6 +8,7 @@ import math
 import numpy as np
 import bisect
 from scipy.integrate import quad
+from matplotlib.collections import LineCollection
 
 class MaxVelocityNotReached(Exception):
     def __init__(self, actual_vel, max_vel):
@@ -35,7 +36,6 @@ class Spline:
         A = self.__calc_A(h)
         B = self.__calc_B(h)
         self.c = np.linalg.solve(A, B)
-        #  print(self.c1)
 
         # calc spline coefficient b and d
         for i in range(self.nx - 1):
@@ -78,8 +78,11 @@ class Spline:
 
         i = self.__search_index(t)
         dx = t - self.x[i]
+
         result = self.b[i] + 2.0 * self.c[i] * dx + 3.0 * self.d[i] * dx ** 2.0
         return result
+
+        
 
     def calcdd(self, t):
         """
@@ -100,6 +103,8 @@ class Spline:
         """
         search data segment index
         """
+        # try this if there is an error with indexing
+        # return min(bisect.bisect(self.x, x) - 1,len(self.x) - 2)
         return bisect.bisect(self.x, x) - 1
 
     def __calc_A(self, h):
@@ -168,17 +173,30 @@ class Spline2D:
         dy = self.sy.calcd(s)
         ddy = self.sy.calcdd(s)
         k = (ddy * dx - ddx * dy) / ((dx ** 2 + dy ** 2)**(3 / 2))
-        return k
+        return k     
     
     def calc_path_length(self):
         """
         calc total path length
         """
         max_s_val = self.s[-1]
-        self.s_dot = lambda t: max(np.linalg.norm(
-            np.hypot(self.sx.calcd(t),self.sy.calcd(t))),1e-6)
-        self.total_length = quad(lambda u: self.s_dot(u), 0, max_s_val)
+        self.s_dot = lambda t: max(
+            np.hypot(self.sx.calcd(t),self.sy.calcd(t)),1e-6)
+        self.path_len = lambda param: quad(lambda u: self.s_dot(u), 0, param)
+        self.total_length = self.path_len(max_s_val)[0]
         return self.total_length
+
+    def xy_derivative_1(self,s):
+        """
+        return derivatives at s
+        """
+        return np.array([self.sx.calcd(s),self.sy.calcd(s)])
+
+    def xy_derivative_2(self,s):
+        """
+        return derivatives at s
+        """
+        return np.array([self.sx.calcdd(s),self.sy.calcdd(s)])
 
     def calc_yaw(self, s):
         """
@@ -212,7 +230,11 @@ class cubic_trajectory:
         self.max_jerk = float(max_jerk)
         self.v0 = v0
         self.total_length = spline_object.calc_path_length()
+        self.spline_object = spline_object
         self.max_vel = float(max_vel)
+        # compute velocity profile
+        self.velocity_profile()
+        self.param_prev = 0
 
 
     def velocity_profile(self):
@@ -238,7 +260,7 @@ class cubic_trajectory:
         # s_s1: length of the maximal jerk section
         s_s1 = self.v0 * t_s1 + self.a0 * t_s1**2/2 + self.max_jerk * t_s1**3 / 6.
         # t_sf: time of traversal of final section, which is also maximal jerk, but has final velocity 0
-        t_sf: self.max_accel / self.max_jerk
+        t_sf = self.max_accel / self.max_jerk
         # v_sf: velocity at begnning of final section
         v_sf = self.max_jerk * t_sf**2 / 2.
         # s_sf: length of final section
@@ -246,6 +268,13 @@ class cubic_trajectory:
 
         # Solve for the maximum achievable velocity based on the kinematic limits imposed by max_accel and max_jerk
         # this leads to a quadratic euqation in v_max: a*v_max**2 + b*v_max + c = 0
+        print(self.max_accel)
+        print(self.max_jerk)
+        print(v_s1)
+        print(self.total_length)
+        print(s_s1)
+        print(s_sf)
+
         a = 1 / self.max_accel
         b = 3. * self.max_accel / (2. * self.max_jerk) + v_s1 / self.max_accel - (
             self.max_accel**2 / self.max_jerk + v_s1) / self.max_accel
@@ -293,15 +322,148 @@ class cubic_trajectory:
         if not np.isclose(self.vels[index], self.max_vel):
             raise MaxVelocityNotReached(self.vela[index], self.max_vel)
         
+        self.seg_lengths[index] = self.vels[index - 1] * self.times[index] + self.max_accel * self.times[index]**2 / 2. \
+            - self.max_jerk * self.times[index]**3 / 6.
         # Section 3: will be done last
         
+        # Section 4: Apply min jerk until min accn is hit
+        index = 4
+        self.times[index] = self.max_accel / self.max_jerk
+        self.vels[index] = self.max_vel - \
+            self.max_jerk * self.times[index]**2 / 2.
+        self.seg_lengths[index] = self.max_vel * self.times[index] - \
+            self.max_jerk * self.times[index]**3 / 6.
+        
+        # Section 5: continue deceleration at max rate
+        index = 5
+        # Compute velocity change over sections
+        delta_v = self.vels[index - 1] - v_sf
+        self.times[index] = delta_v / self.max_accel
+        self.vels[index] = self.vels[index - 1] - \
+            self.max_accel * self.times[index]
+        self.seg_lengths[index] = self.vels[index - 1] * \
+            self.times[index] - self.max_accel * self.times[index]**2 / 2.
 
+        # Section 6(final): max jerk to get to zero velocity and zero acceleration simultaneously
+        index = 6
+        self.times[index] = t_sf
+        self.vels[index] = self.vels[index - 1] - self.max_jerk * t_sf**2 /2.
+        print(self.vels)
+        print(self.times)
+        print(self.seg_lengths)
+        try:
+            assert np.isclose(self.vels[index], 0)
+        except AssertionError as e:
+            print('The final veloity {} is not zero'.format(self.vels[index]))
+            raise e
+        
+        self.seg_lengths[index] = s_sf
 
+        if self.seg_lengths.sum() < self.total_length:
+            index = 3
+            # the length of the crusie section is whatever length hasn't already been accounted for
+            # NOTE: the total array self.seg_lengths is summed because the entry for the cruise segment is
+            # initialized to 0!
+            self.seg_lengths[index] = self.total_length - \
+                self.seg_lengths.sum()
+            self.vels[index] = self.max_vel
+            self.times[index] = self.seg_lengths[index] / self.max_vel  
 
+        # Make sure that all of the times are positive, otherwise the kinematic limits
+        # chosen cannot be enforces on the path.
+        assert(np.all(self.times >= 0))
+        self.total_time = self.times.sum()
 
+    def calc_traj_point(self, time):
+        # Compute velocity at time
+        if time <= self.times[0]:
+            linear_velocity = self.v0 + self.max_jerk * time**2 / 2.
+            s = self.v0 * time + self.max_jerk * time**3 / 6
+            linear_accel = self.max_jerk * time
+        elif time <= self.times[:2].sum():
+            delta_t = time - self.times[0]
+            linear_velocity = self.vels[0] + self.max_accel * delta_t
+            s = self.seg_lengths[0] + self.vels[0] * \
+                delta_t + self.max_accel * delta_t**2 / 2.
+            linear_accel = self.max_accel
+        elif time <= self.times[:3].sum():
+            delta_t = time - self.times[:2].sum()
+            linear_velocity = self.vels[1] + self.max_accel * \
+                delta_t - self.max_jerk * delta_t**2 / 2.
+            s = self.seg_lengths[:2].sum() + self.vels[1] * delta_t + self.max_accel * delta_t**2 / 2. \
+                - self.max_jerk * delta_t**3 / 6.
+            linear_accel = self.max_accel - self.max_jerk * delta_t
+        elif time <= self.times[:4].sum():
+            delta_t = time - self.times[:3].sum()
+            linear_velocity = self.vels[3]
+            s = self.seg_lengths[:3].sum() + self.vels[3] * delta_t
+            linear_accel = 0.
+        elif time <= self.times[:5].sum():
+            delta_t = time - self.times[:4].sum()
+            linear_velocity = self.vels[3] - self.max_jerk * delta_t**2 / 2.
+            s = self.seg_lengths[:4].sum() + self.vels[3] * \
+                delta_t - self.max_jerk * delta_t**3 / 6.
+            linear_accel = -self.max_jerk * delta_t
+        elif time <= self.times[:-1].sum():
+            delta_t = time - self.times[:5].sum()
+            linear_velocity = self.vels[4] - self.max_accel * delta_t
+            s = self.seg_lengths[:5].sum() + self.vels[4] * \
+                delta_t - self.max_accel * delta_t**2 / 2.
+            linear_accel = -self.max_accel
+        elif time < self.times.sum():
+            delta_t = time - self.times[:-1].sum()
+            linear_velocity = self.vels[5] - self.max_accel * \
+                delta_t + self.max_jerk * delta_t**2 / 2.
+            s = self.seg_lengths[:-1].sum() + self.vels[5] * delta_t - self.max_accel * delta_t**2 / 2. \
+                + self.max_jerk * delta_t**3 / 6.
+            linear_accel = -self.max_accel + self.max_jerk * delta_t
+        else:
+            linear_velocity = 0.
+            s = self.total_length
+            linear_accel = 0.
+        curr_length = s
+        interpol_param = self.get_interp_param(
+            s = curr_length, prev_param = self.param_prev)
+        # print(interpol_param)
+        self.param_prev = interpol_param
+        # compute anglular veclocity of current point= (ydd*xd - xdd*yd)/9xd**2 + yd**2)
+        d = self.spline_object.xy_derivative_1(interpol_param)
+        dd = self.spline_object.xy_derivative_2(interpol_param)
+        # su - the rate of change of arclength wrt u
+        su = self.spline_object.s_dot(interpol_param)
+        if not np.isclose(su, 0.) and not np.isclose(linear_velocity, 0.):
+            # ut - time derivative of interpolation paramter u
+            ut = linear_velocity / su
+            # utt - time-derivative of ut
+            utt = linear_accel / su - \
+                (d[0] * dd[0] + d[1] * dd[1]) / su**2 * ut
+            xt = d[0] * ut
+            yt = d[1] * ut
+            xtt = dd[0] * ut**2 + d[0] * utt
+            ytt = dd[1] * ut**2 + d[1] * utt
+            angular_velocity = (ytt * xt - xtt * yt) / linear_velocity**2
+        else:
+            angular_velocity = 0.
+        
+        # combine path point with orienation and velocities
+        pos = self.spline_object.calc_position(interpol_param)
+        state = np.array([pos[0], pos[1], np.arctan2(
+            d[1], d[0]), linear_velocity, angular_velocity])
+        return state
 
-
-
+    def get_interp_param(self, s, prev_param, tol=0.001):
+        def f(u):
+            return self.spline_object.path_len(prev_param)[0] - s
+        
+        def fprime(u):
+            return self.spline_object.s_dot(prev_param)
+        
+        while (0 <= prev_param <= self.spline_object.s[-1]) and abs(f(prev_param)) > tol:
+            prev_param -= f(prev_param) / fprime(prev_param)
+        
+        new_param = max(0, min(prev_param, self.spline_object.s[-1]))
+        #print("new_param: {}".format(new_param))
+        return new_param
 
 
 def main():  # pragma: no cover
@@ -331,30 +493,72 @@ def main():  # pragma: no cover
         ryaw.append(sp.calc_yaw(i_s))
         rk.append(sp.calc_curvature(i_s))
 
-    plt.subplots(1)
-    plt.plot(x, y, "xb", label="input")
-    plt.plot(rx, ry, "-r", label="spline")
-    plt.grid(True)
-    plt.axis("equal")
-    plt.xlabel("x[m]")
-    plt.ylabel("y[m]")
-    plt.legend()
+    cub_traj = cubic_trajectory(sp, max_vel=0.15, max_accel=0.05, max_jerk=0.1)
 
-    plt.subplots(1)
-    plt.plot(s, [np.rad2deg(iyaw) for iyaw in ryaw], "-r", label="yaw")
-    plt.grid(True)
-    plt.legend()
-    plt.xlabel("line length[m]")
-    plt.ylabel("yaw angle[deg]")
+    # interpolate at several points along the path
+    print("total time for execution is {}s".format(cub_traj.total_time))
+    times = np.linspace(0, cub_traj.total_time, 501)
+    state = np.empty((5, times.size))
+    for i, t in enumerate(times):
+        state[:, i] = cub_traj.calc_traj_point(t)
 
-    plt.subplots(1)
-    plt.plot(s, rk, "-r", label="curvature")
-    plt.grid(True)
-    plt.legend()
-    plt.xlabel("line length[m]")
-    plt.ylabel("curvature [1/m]")
+    fig, ax = plt.subplots()
+    x_T, y_T = state[0, :], state[1, :]
+    points = np.array([x_T, y_T]).T.reshape(-1, 1, 2)
+    segs = np.concatenate([points[:-1], points[1:]], axis=1)
+    lc = LineCollection(segs, cmap=plt.get_cmap('inferno'))
+    ax.set_xlim(np.min(x_T) - 1, np.max(x_T) + 1)
+    ax.set_ylim(np.min(y_T) - 1, np.max(y_T) + 1)
+    lc.set_array(state[3, :])
+    lc.set_linewidth(3)
+    ax.add_collection(lc)
+    axcb = fig.colorbar(lc)
+    axcb.set_label('velocity(m/s)')
+    ax.set_title('Trajectory')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.pause(1.0)
 
+    cmap_copy = lc.get_color()
+    # print(cmap_copy)
+
+    fig1, ax1 = plt.subplots()
+    ax1.plot(times, state[3, :], 'b-')
+    ax1.set_xlabel('time(s)')
+    ax1.set_ylabel('velocity(m/s)', color='b')
+    ax1.tick_params('y', colors='b')
+    ax1.set_title('Control')
+    ax2 = ax1.twinx()
+    ax2.plot(times, state[4, :], 'r-')
+    ax2.set_ylabel('angular velocity(rad/s)', color='r')
+    ax2.tick_params('y', colors='r')
+    fig.tight_layout()
     plt.show()
+
+    # plt.subplots(1)
+    # plt.plot(x, y, "xb", label="input")
+    # plt.plot(rx, ry, "-r", label="spline")
+    # plt.grid(True)
+    # plt.axis("equal")
+    # plt.xlabel("x[m]")
+    # plt.ylabel("y[m]")
+    # plt.legend()
+
+    # plt.subplots(1)
+    # plt.plot(s, [np.rad2deg(iyaw) for iyaw in ryaw], "-r", label="yaw")
+    # plt.grid(True)
+    # plt.legend()
+    # plt.xlabel("line length[m]")
+    # plt.ylabel("yaw angle[deg]")
+
+    # plt.subplots(1)
+    # plt.plot(s, rk, "-r", label="curvature")
+    # plt.grid(True)
+    # plt.legend()
+    # plt.xlabel("line length[m]")
+    # plt.ylabel("curvature [1/m]")
+
+    # plt.show()
 
 
 if __name__ == '__main__':

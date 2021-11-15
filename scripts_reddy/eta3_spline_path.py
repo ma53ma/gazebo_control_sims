@@ -182,9 +182,7 @@ class Eta3PathSegment(object):
                   - 1. / 2 * eta[1] * eta[3] * kappa[2]) * cb
         self.coeffs[1, 7] = tmp1 + tmp2 + tmp3 + tmp4 + tmp5
         self.s_dot = lambda u: max(np.linalg.norm(
-            self.coeffs[:, 1:].dot(np.array(
-                [1, 2. * u, 3. * u**2, 4. * u**3,
-                 5. * u**4, 6. * u**5, 7. * u**6]))), 1e-6)
+            self.coeffs[:, 1:].dot(np.array([1, 2. * u, 3. * u**2, 4. * u**3, 5. * u**4, 6. * u**5, 7. * u**6]))), 1e-6)
         self.f_length = lambda ue: quad(lambda u: self.s_dot(u), 0, ue)
         self.segment_length = self.f_length(1)[0]
 
@@ -356,8 +354,8 @@ def red_test():
     path_segments = []
     start_pose = lines[0]
     end_pose = lines[1]
-    kappa = [0,0,0,0]
-    eta = [4,4,0,0,0,0]
+    kappa = [1,1,0,0]
+    eta = [1,0,1,0,0,0]
     for i, pose in enumerate(lines):
         path_segments.append(Eta3PathSegment(
             start_pose=start_pose, end_pose=end_pose, eta=eta, kappa=kappa))

@@ -91,6 +91,13 @@ class eta3_trajectory(Eta3Path):
         s_sf = self.max_jerk * t_sf**3 / 6.
         # solve for the maximum achievable velocity based on the kinematic limits imposed by max_accel and max_jerk
         # this leads to a quadratic equation in v_max: a*v_max**2 + b*v_max + c = 0
+        print(self.max_accel)
+        print(self.max_jerk)
+        print(v_s1)
+        print(self.total_length)
+        print(s_s1)
+        print(s_sf)
+
         a = 1 / self.max_accel
         b = 3. * self.max_accel / (2. * self.max_jerk) + v_s1 / self.max_accel - (
             self.max_accel**2 / self.max_jerk + v_s1) / self.max_accel
@@ -165,7 +172,9 @@ class eta3_trajectory(Eta3Path):
         index = 6
         self.times[index] = t_sf
         self.vels[index] = self.vels[index - 1] - self.max_jerk * t_sf**2 / 2.
-
+        print(self.vels)
+        print(self.times)
+        print(self.seg_lengths)
         try:
             assert np.isclose(self.vels[index], 0)
         except AssertionError as e:
@@ -195,8 +204,11 @@ class eta3_trajectory(Eta3Path):
 
         def fprime(u):
             return self.segments[seg_id].s_dot(u)
+
         while (0 <= ui <= 1) and abs(f(ui)) > tol:
             ui -= f(ui) / fprime(ui)
+        print("ui: {}".format(ui))
+        
         ui = max(0, min(ui, 1))
         return ui
 
@@ -425,7 +437,7 @@ def test3(max_vel=2.0):
     trajectory_segments = path_segments
     # construct the whole path
     traj = eta3_trajectory(trajectory_segments,
-                           max_vel=max_vel, max_accel=0.5, max_jerk=1)
+                           max_vel=0.15, max_accel=0.05, max_jerk=0.1)
 
     # interpolate at several points along the path
     times = np.linspace(0, traj.total_time, 1001)

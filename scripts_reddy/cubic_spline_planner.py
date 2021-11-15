@@ -95,7 +95,9 @@ class Spline:
         """
         search data segment index
         """
+        
         return bisect.bisect(self.x, x) - 1
+        
 
     def __calc_A(self, h):
         """
@@ -201,6 +203,8 @@ def main():  # pragma: no cover
     lines = np.pad(np.array(lines),[(0,0),(0,1)],mode='constant')
     x = lines[:,0]
     y = lines[:,1]
+    print(x)
+    print(len(x))
 
     # x = [-2.5, 0.0, 2.5, 5.0, 7.5, 3.0, -1.0]
     # y = [0.7, -6, 5, 6.5, 0.0, 5.0, -2.0]
