@@ -100,7 +100,7 @@ class MarkerBasics(object):
                 self.marker_object.color.b = 0.1
 
 
-        self.marker_object.lifetime = rospy.Duration(0)
+        self.marker_object.lifetime = rospy.Duration(1)
 
         return self.marker_object
     
@@ -191,12 +191,12 @@ if __name__ == '__main__':
     my_sch.run()
 
     try:
-        markerbasics_object.start()
-        path_object.start()
+        # markerbasics_object.start()
+        # path_object.start()
         linestrip_object.start()
         pass
     except rospy.ROSInterruptException:
         pass
 
 
-    rospy.spin()
+    # rospy.spin()
