@@ -21,8 +21,9 @@ class MarkerBasics(object):
         self.scale = scale
         self.is_marker_array = is_marker_array
         if is_marker_array == True:
-            self.init_marker_Arr(points_array, z_val=0)
             self.marker_object_pub = rospy.Publisher(pub_topic, MarkerArray, queue_size=1)
+            self.init_marker_Arr(points_array, z_val=0)
+            
         else:
             self.init_lineStrip(points_array, rgba_array, z_val = 0)
             self.marker_object_pub = rospy.Publisher(pub_topic, Marker, queue_size=1)
@@ -85,7 +86,7 @@ class MarkerBasics(object):
         self.marker_object.scale.y = self.scale
         self.marker_object.scale.z = self.scale
 
-        if self.is_marker_array == False:
+        if self.is_marker_array == True:
             self.marker_object.color.r = 0.0
             self.marker_object.color.g = 0.0
             self.marker_object.color.b = 1.0
@@ -100,7 +101,7 @@ class MarkerBasics(object):
                 self.marker_object.color.b = 0.1
 
 
-        self.marker_object.lifetime = rospy.Duration(1)
+        self.marker_object.lifetime = rospy.Duration(0)
 
         return self.marker_object
     
